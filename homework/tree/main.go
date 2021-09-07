@@ -8,52 +8,6 @@ import (
 	"strings"
 )
 
-func dirTree__(out *os.File, path string, printFiles bool) error {
-
-	//fmt.Println(path, strings.Count(path, "/"))
-
-	var sb strings.Builder
-
-	for i := 0; i < strings.Count(path, "/"); i++ {
-		sb.WriteString("\t")
-	}
-
-	preString := sb.String()
-
-	files, err := ioutil.ReadDir(path)
-	if err != nil {
-		return err
-	}
-
-	for _, f := range files {
-
-		if f.IsDir() {
-			fmt.Println("---" + preString + f.Name())
-		} else {
-			fmt.Println(preString + f.Name())
-
-		}
-
-		nextPath := f.Name()
-		if path != "." {
-			nextPath = path + "/" + f.Name()
-		}
-
-		if f.IsDir() {
-			//fmt.Print("\t")
-
-			err := dirTree(out, nextPath, printFiles)
-			if err != nil {
-				fmt.Println(err)
-				return err
-			}
-		}
-
-	}
-
-	return nil
-}
-
 func GetNames(path string, isDir bool) ([]string, error) {
 
 	fs, err := ioutil.ReadDir(path)
@@ -95,9 +49,15 @@ func FormatFolderNames(path string, prevPath string) string {
 func FormatFileNames(paths []string, prevString string) string {
 
 	var sb strings.Builder
-	for _, f := range paths {
+	for index, f := range paths {
 		//fmt.Println(f)
-		sb.WriteString(prevString + f + "\n")
+		//sb.WriteString(prevString + f + "\n")
+		if index == len(paths)-1 {
+			sb.WriteString(strings.Replace(prevString, "├───", "└───", 1) + f)
+
+		} else {
+			sb.WriteString(prevString + f + "\n")
+		}
 	}
 
 	return sb.String()
@@ -111,7 +71,7 @@ func GetPreString(path string) string {
 	}
 
 	for i := 0; i < strings.Count(path, "/"); i++ {
-		sb.WriteString("\t")
+		sb.WriteString("\t|")
 	}
 	sb.WriteString("\t")
 	sb.WriteString("├───")
@@ -123,9 +83,9 @@ func GetFolderPreString(path string) string {
 	var sb strings.Builder
 
 	for i := 0; i < strings.Count(path, "/"); i++ {
-		sb.WriteString("\t")
+		sb.WriteString("\t|")
 	}
-	sb.WriteString("├───")
+	sb.WriteString("───")
 
 	return sb.String()
 
