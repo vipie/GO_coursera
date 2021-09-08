@@ -66,7 +66,7 @@ func GetAllPaths(path string) []string {
 	return ret
 }
 
-func FormatFileNames(paths []string, path string, mapa map[string]bool) string {
+/*func FormatFileNames(paths []string, path string, mapa map[string]bool) string {
 
 	var ret string
 
@@ -74,10 +74,17 @@ func FormatFileNames(paths []string, path string, mapa map[string]bool) string {
 		ret = ret + FormatItemName(pt, path, mapa) + "\n"
 	}
 	return ret[:len(ret)-1]
+}*/
+
+func DeleteRootPath(path string, subPath string) string {
+	str := strings.Replace(path, subPath, "", 1)
+
+	return strings.Replace(str, "//", "", 1)
 }
 
-func FormatItemName(name string, path string, mapa map[string]bool) string {
+func FormatItemName(name string, path string, mapa map[string]bool, rootPath string) string {
 
+	//noRootPath := DeleteRootPath(path, rootPath)
 	var sb strings.Builder
 	if len(GetAllPaths(ConcatFolderName(name, path))) > 1 {
 		for _, pt := range GetAllPaths(path) {
@@ -87,9 +94,7 @@ func FormatItemName(name string, path string, mapa map[string]bool) string {
 			} else {
 				sb.WriteString("│\t")
 			}
-
 		}
-
 	}
 
 	if mapa[ConcatFolderName(name, path)] {
@@ -155,9 +160,10 @@ const testFullResult = `├───project
 └───zzfile.txt (empty)
 `
 
-func dirTree_(out *os.File, path string, printFiles bool, mapa map[string]bool) (map[string]bool, error) {
+func dirTree_(out *os.File, path string, printFiles bool,
+	mapa map[string]bool, rootPath string) (map[string]bool, error) {
 
-	fs, _ := ioutil.ReadDir(path)
+	fs, _ := ioutil.ReadDir(rootPath + "/" + path)
 
 	if !printFiles {
 
@@ -178,10 +184,11 @@ func dirTree_(out *os.File, path string, printFiles bool, mapa map[string]bool) 
 	mapa = FillMapa(mapa, fs, path)
 
 	for _, f := range fs {
-		fmt.Fprintln(out, FormatItemName(f.Name(), path, mapa))
+		fmt.Fprintln(out, FormatItemName(f.Name(), path, mapa, rootPath))
 
 		if f.IsDir() {
-			mapa, _ = dirTree_(out, ConcatFolderName(f.Name(), path), printFiles, mapa)
+			mapa, _ = dirTree_(out, ConcatFolderName(f.Name(), path),
+				printFiles, mapa, rootPath)
 		}
 
 	}
@@ -191,7 +198,7 @@ func dirTree_(out *os.File, path string, printFiles bool, mapa map[string]bool) 
 func dirTree(out *os.File, path string, printFiles bool) error {
 
 	ends_map := make(map[string]bool)
-	_, err := dirTree_(out, path, printFiles, ends_map)
+	_, err := dirTree_(out, ".", printFiles, ends_map, path)
 	return err
 
 }
