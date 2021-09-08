@@ -36,7 +36,7 @@ func GetFolderNames(path string) ([]string, error) {
 	return GetNames(path, true)
 }
 
-func FormatFolderNames(path string, prevPath string) string {
+func ConcatFolderName(path string, prevPath string) string {
 
 	if prevPath == "." {
 		return path
@@ -46,72 +46,148 @@ func FormatFolderNames(path string, prevPath string) string {
 
 }
 
-func FormatFileNames(paths []string, prevString string) string {
+// разбить путь на массив всех путей
+func GetAllPaths(path string) []string {
+	var ret []string
 
-	var sb strings.Builder
-	for index, f := range paths {
-		//fmt.Println(f)
-		//sb.WriteString(prevString + f + "\n")
-		if index == len(paths)-1 {
-			sb.WriteString(strings.Replace(prevString, "├───", "└───", 1) + f)
-
-		} else {
-			sb.WriteString(prevString + f + "\n")
+	cur_ind := 0
+	ind := 0
+	for true {
+		ind = strings.Index(path[cur_ind:], "/")
+		if ind == -1 {
+			ret = append(ret, path)
+			break
 		}
+
+		ret = append(ret, path[:ind+cur_ind])
+		cur_ind = cur_ind + ind + 1
 	}
 
-	return sb.String()
+	return ret
 }
 
-func GetPreString(path string) string {
+///  формирование строк динамически
+func FormatFileNames(paths []string, path string, mapa map[string]bool) string {
+
+	var ret string
+
+	for _, pt := range paths {
+		ret = ret + FormatItemName(pt, path, mapa) + "\n"
+	}
+	return ret[:len(ret)-1]
+}
+
+func FormatItemName(name string, path string, mapa map[string]bool) string {
+
 	var sb strings.Builder
+	if len(GetAllPaths(ConcatFolderName(name, path))) > 1 {
+		for _, pt := range GetAllPaths(path) {
 
-	if path == "." {
-		return "├───"
+			if mapa[pt] {
+				sb.WriteString("\t")
+			} else {
+				sb.WriteString("│\t")
+			}
+
+		}
+
 	}
 
-	for i := 0; i < strings.Count(path, "/"); i++ {
-		sb.WriteString("\t|")
+	if mapa[ConcatFolderName(name, path)] {
+		sb.WriteString("└───")
+	} else {
+		sb.WriteString("├───")
 	}
-	sb.WriteString("\t")
-	sb.WriteString("├───")
 
+	sb.WriteString(name)
 	return sb.String()
 
 }
-func GetFolderPreString(path string) string {
-	var sb strings.Builder
 
-	for i := 0; i < strings.Count(path, "/"); i++ {
-		sb.WriteString("\t|")
+func FillMapa(mapa map[string]bool, names []string, path string) map[string]bool {
+	for idx, n := range names {
+		mapa[ConcatFolderName(n, path)] = idx == len(names)-1
 	}
-	sb.WriteString("───")
 
-	return sb.String()
-
+	//fmt.Println(mapa)
+	return mapa
 }
 
-func dirTree(out *os.File, path string, printFiles bool) error {
+const testDirResult = `├───project
+├───static
+│	├───a_lorem
+│	│	└───ipsum
+│	├───css
+│	├───html
+│	├───js
+│	└───z_lorem
+│		└───ipsum
+└───zline
+	└───lorem
+		└───ipsum
+`
 
-	preString := GetPreString(path)
+const testFullResult = `├───project
+│	├───file.txt (19b)
+│	└───gopher.png (70372b)
+├───static
+│	├───a_lorem
+│	│	├───dolor.txt (empty)
+│	│	├───gopher.png (70372b)
+│	│	└───ipsum
+│	│		└───gopher.png (70372b)
+│	├───css
+│	│	└───body.css (28b)
+│	├───empty.txt (empty)
+│	├───html
+│	│	└───index.html (57b)
+│	├───js
+│	│	└───site.js (10b)
+│	└───z_lorem
+│		├───dolor.txt (empty)
+│		├───gopher.png (70372b)
+│		└───ipsum
+│			└───gopher.png (70372b)
+├───zline
+│	├───empty.txt (empty)
+│	└───lorem
+│		├───dolor.txt (empty)
+│		├───gopher.png (70372b)
+│		└───ipsum
+│			└───gopher.png (70372b)
+└───zzfile.txt (empty)
+`
+
+func dirTree_(out *os.File, path string, printFiles bool, mapa map[string]bool) (map[string]bool, error) {
+
+	//preString := GetPreString(path, mapa)
 
 	if printFiles {
 		names, _ := GetFileNames(path)
 		sort.Strings(names)
-		fmt.Fprintln(out, FormatFileNames(names, preString))
+		mapa = FillMapa(mapa, names, path)
+		fmt.Fprintln(out, FormatFileNames(names, path, mapa))
 	}
 
 	names, _ := GetFolderNames(path)
 
 	sort.Strings(names)
+	mapa = FillMapa(mapa, names, path)
 
 	for _, f := range names {
-		formattedFoldersNames := FormatFolderNames(f, path)
-		fmt.Fprintln(out, GetFolderPreString(formattedFoldersNames)+f)
-		dirTree(out, formattedFoldersNames, printFiles)
+		fmt.Fprintln(out, FormatItemName(f, path, mapa))
+		mapa, _ = dirTree_(out, ConcatFolderName(f, path), printFiles, mapa)
+
 	}
 
-	return nil
+	return mapa, nil
+}
+func dirTree(out *os.File, path string, printFiles bool) error {
+
+	ends_map := make(map[string]bool)
+	_, err := dirTree_(out, path, printFiles, ends_map)
+	return err
+
 }
 
 func main() {
