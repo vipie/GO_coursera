@@ -66,7 +66,6 @@ func GetAllPaths(path string) []string {
 	return ret
 }
 
-///  формирование строк динамически
 func FormatFileNames(paths []string, path string, mapa map[string]bool) string {
 
 	var ret string
@@ -104,12 +103,10 @@ func FormatItemName(name string, path string, mapa map[string]bool) string {
 
 }
 
-func FillMapa(mapa map[string]bool, names []string, path string) map[string]bool {
+func FillMapa(mapa map[string]bool, names []os.FileInfo, path string) map[string]bool {
 	for idx, n := range names {
-		mapa[ConcatFolderName(n, path)] = idx == len(names)-1
+		mapa[ConcatFolderName(n.Name(), path)] = idx == len(names)-1
 	}
-
-	//fmt.Println(mapa)
 	return mapa
 }
 
@@ -160,23 +157,32 @@ const testFullResult = `├───project
 
 func dirTree_(out *os.File, path string, printFiles bool, mapa map[string]bool) (map[string]bool, error) {
 
-	//preString := GetPreString(path, mapa)
+	fs, _ := ioutil.ReadDir(path)
 
-	if printFiles {
-		names, _ := GetFileNames(path)
-		sort.Strings(names)
-		mapa = FillMapa(mapa, names, path)
-		fmt.Fprintln(out, FormatFileNames(names, path, mapa))
+	if !printFiles {
+
+		var filteredFs []os.FileInfo
+
+		for _, s := range fs {
+			if s.IsDir() {
+				filteredFs = append(filteredFs, s)
+			}
+		}
+		fs = filteredFs
 	}
 
-	names, _ := GetFolderNames(path)
+	sort.Slice(fs, func(i, j int) bool {
+		return fs[i].Name() < (fs[j].Name())
+	})
 
-	sort.Strings(names)
-	mapa = FillMapa(mapa, names, path)
+	mapa = FillMapa(mapa, fs, path)
 
-	for _, f := range names {
-		fmt.Fprintln(out, FormatItemName(f, path, mapa))
-		mapa, _ = dirTree_(out, ConcatFolderName(f, path), printFiles, mapa)
+	for _, f := range fs {
+		fmt.Fprintln(out, FormatItemName(f.Name(), path, mapa))
+
+		if f.IsDir() {
+			mapa, _ = dirTree_(out, ConcatFolderName(f.Name(), path), printFiles, mapa)
+		}
 
 	}
 
