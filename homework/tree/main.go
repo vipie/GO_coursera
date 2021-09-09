@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -82,9 +84,9 @@ func DeleteRootPath(path string, subPath string) string {
 	return strings.Replace(str, "//", "", 1)
 }
 
-func FormatItemName(name string, path string, mapa map[string]bool, rootPath string) string {
+func FormatItemName(fs os.FileInfo, path string, mapa map[string]bool, rootPath string) string {
 
-	//noRootPath := DeleteRootPath(path, rootPath)
+	name := fs.Name()
 	var sb strings.Builder
 	if len(GetAllPaths(ConcatFolderName(name, path))) > 1 {
 		for _, pt := range GetAllPaths(path) {
@@ -103,7 +105,19 @@ func FormatItemName(name string, path string, mapa map[string]bool, rootPath str
 		sb.WriteString("├───")
 	}
 
+	var fileSize string
+
+	if fs.IsDir() {
+	} else if fs.Size() == 0 {
+		fileSize = "(empty)"
+	} else {
+		fileSize = "(" + strconv.FormatInt(fs.Size(), 10) + "b)"
+	}
+
 	sb.WriteString(name)
+	if fileSize != "" {
+		sb.WriteString(" " + fileSize)
+	}
 	return sb.String()
 
 }
@@ -115,7 +129,7 @@ func FillMapa(mapa map[string]bool, names []os.FileInfo, path string) map[string
 	return mapa
 }
 
-const testDirResult = `├───project
+const testDirResult_ = `├───project
 ├───static
 │	├───a_lorem
 │	│	└───ipsum
@@ -129,7 +143,7 @@ const testDirResult = `├───project
 		└───ipsum
 `
 
-const testFullResult = `├───project
+const testFullResult_ = `├───project
 │	├───file.txt (19b)
 │	└───gopher.png (70372b)
 ├───static
@@ -160,7 +174,7 @@ const testFullResult = `├───project
 └───zzfile.txt (empty)
 `
 
-func dirTree_(out *os.File, path string, printFiles bool,
+func dirTree_(out io.Writer, path string, printFiles bool,
 	mapa map[string]bool, rootPath string) (map[string]bool, error) {
 
 	fs, _ := ioutil.ReadDir(rootPath + "/" + path)
@@ -184,7 +198,7 @@ func dirTree_(out *os.File, path string, printFiles bool,
 	mapa = FillMapa(mapa, fs, path)
 
 	for _, f := range fs {
-		fmt.Fprintln(out, FormatItemName(f.Name(), path, mapa, rootPath))
+		fmt.Fprintln(out, FormatItemName(f, path, mapa, rootPath))
 
 		if f.IsDir() {
 			mapa, _ = dirTree_(out, ConcatFolderName(f.Name(), path),
@@ -195,7 +209,9 @@ func dirTree_(out *os.File, path string, printFiles bool,
 
 	return mapa, nil
 }
-func dirTree(out *os.File, path string, printFiles bool) error {
+
+//func dirTree(out *os.File, path string, printFiles bool) error {
+func dirTree(out io.Writer, path string, printFiles bool) error {
 
 	ends_map := make(map[string]bool)
 	_, err := dirTree_(out, ".", printFiles, ends_map, path)
