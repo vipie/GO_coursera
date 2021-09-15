@@ -1,10 +1,15 @@
 package main
 
 import (
+	"crypto/md5"
+	"fmt"
+	"hash/crc32"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 /*
@@ -27,7 +32,7 @@ import (
 // сюда писать код
 
 //ExecutePipeline
-/*
+
 type job func(in, out chan interface{})
 
 var (
@@ -177,7 +182,7 @@ func main() {
 	}
 
 }
-*/
+
 var SingleHash = job(func(in, out chan interface{}) {
 
 	var valueCounter int
