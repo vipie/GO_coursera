@@ -331,26 +331,34 @@ func ExecutePipeline(in ...job) (result int) {
 	//fmt.Printf("in := %#v \n", in)
 
 	in_ch := make(chan interface{}, 100)
-	out_ch := make(chan interface{}, 100)
+	out_ch1 := make(chan interface{}, 100)
 
 	//var wg sync.WaitGroup
 	//const numDigesters = 20
 	//wg.Add(1)
+	mu := &sync.Mutex{}
 
-	//go func() {
-	in[0](in_ch, out_ch)
-	in_ch = out_ch
-	//	wg.Done()
-	//}()
+	firststage := in[0]
+	go func(my *sync.Mutex) {
+		mu.Lock()
+		firststage(in_ch, out_ch1)
+		close(out_ch1)
+		mu.Unlock()
+
+		//	wg.Done()
+	}(mu)
 
 	//close(out_ch)
 
 	//go func() {
 	//	wg.Wait()
-	close(out_ch)
-	//}()
 
-	out_ch = make(chan interface{}, 100)
+	//}()
+	mu.Lock()
+	in_ch = out_ch1
+	mu.Unlock()
+
+	out_ch := make(chan interface{}, 100)
 
 	count := CountValuesFromChannel(in_ch, out_ch)
 	in_ch = out_ch
