@@ -1,15 +1,12 @@
 package main
 
 import (
-	"crypto/md5"
 	"fmt"
-	"hash/crc32"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 /*
@@ -32,7 +29,7 @@ import (
 // сюда писать код
 
 //ExecutePipeline
-
+/*
 type job func(in, out chan interface{})
 
 var (
@@ -160,10 +157,13 @@ func main() {
 	start := time.Now()
 
 	ExecutePipeline(hashSignJobs...)
+	//ExecutePipeline(freeFlowJobs...)
 
 	end := time.Since(start)
 
 	expectedTime := 3 * time.Second
+
+	fmt.Println("\nexecution time: %s\n", end)
 
 	if testExpected != testResult {
 		fmt.Println("results not match\nGot: %v\nExpected: %v", testResult, testExpected)
@@ -181,16 +181,24 @@ func main() {
 		fmt.Println("not enough hash-func calls")
 	}
 
-}
+	start = time.Now()
+
+	ExecutePipeline(freeFlowJobs...)
+
+	end = time.Since(start)
+
+	fmt.Println("\nexecution time: %s\n", end)
+} */
 
 var SingleHash = job(func(in, out chan interface{}) {
 
-	var valueCounter int
+	var recieved uint32
 
 	mu := &sync.Mutex{}
 	for i := range in {
 
-		valueCounter++
+		//recieved++
+		atomic.AddUint32(&recieved, 1)
 		//fmt.Println("\tget", i)
 		go func(inString string, mu *sync.Mutex) {
 
@@ -212,7 +220,13 @@ var SingleHash = job(func(in, out chan interface{}) {
 			str2 := <-out_ch2
 
 			retStr := str1 + "~" + str2
+
 			out <- retStr
+
+			atomic.AddUint32(&recieved, ^uint32(0))
+			if atomic.LoadUint32(&recieved) == 0 {
+				//close(out)
+			}
 
 		}(strconv.Itoa(i.(int)), mu)
 	}
@@ -223,10 +237,14 @@ var SingleHash = job(func(in, out chan interface{}) {
 
 var MultiHash = job(func(in, out chan interface{}) {
 
+	var recieved uint32
+
 	for dataIm := range in {
+		atomic.AddUint32(&recieved, 1)
+		//recieved++
 		go func(dataIm interface{}, out chan interface{}) {
 
-			//fmt.Println("\tMultiHash get", dataIm)
+			fmt.Println("\tMultiHash get", dataIm)
 
 			wg := &sync.WaitGroup{}
 			mu := &sync.Mutex{}
@@ -252,8 +270,14 @@ var MultiHash = job(func(in, out chan interface{}) {
 			//runtime.Gosched()
 
 			retStr := strings.Join(resArray[:], "")
-			//fmt.Println("\tMultiHash out", retStr)
+			fmt.Println("\tMultiHash out", retStr)
 			out <- retStr
+
+			atomic.AddUint32(&recieved, ^uint32(0))
+			if atomic.LoadUint32(&recieved) == 0 {
+				//close(out)
+			}
+
 		}(dataIm, out)
 
 	}
@@ -267,33 +291,41 @@ var MultiHash = job(func(in, out chan interface{}) {
 //объединяет отсортированный результат через _ (символ подчеркивания) в одну строку
 
 var CombineResults = job(func(in, out chan interface{}) {
-
-	//wg := &sync.WaitGroup{}
-
-	valCounter := <-out
-	combineSlice := make([]string, valCounter.(int))
-
-	//mu := &sync.Mutex{}
-	for j := 0; j < valCounter.(int); j++ {
-		i := <-in
-		//wg.Add(1)
-		//fmt.Println("\tCombineResults get", i.(string), len(combineSlice))
-		//go func(combineSlice []string, wg *sync.WaitGroup, mu *sync.Mutex) {
-		//	defer wg.Done()
-		//	mu.Lock()
-		//combineSlice = append(combineSlice, i.(string))
-		combineSlice[j] = i.(string)
-		//	mu.Unlock()
-		//}(combineSlice, wg, mu)
-
+	var combineSlice []string
+	for dataIm := range in {
+		combineSlice = append(combineSlice, dataIm.(string))
 	}
-	//wg.Wait()
+
 	sort.Strings(combineSlice)
 
 	retStr := strings.Join(combineSlice, "_")
-	//fmt.Println("\tCombineResults out", retStr)
+	fmt.Println("\t CombineResults out", retStr)
+
 	out <- retStr
 })
+
+/*
+var recieved uint32
+ var freeFlowJobs = []job{
+	job(func(in, out chan interface{}) {
+		out <- uint32(1)
+		out <- uint32(3)
+		out <- uint32(4)
+	}),
+	job(func(in, out chan interface{}) {
+		for val := range in {
+			out <- val.(uint32) * 3
+			time.Sleep(time.Millisecond * 100)
+		}
+	}),
+	job(func(in, out chan interface{}) {
+		for val := range in {
+			fmt.Println("collected", val)
+			atomic.AddUint32(&recieved, val.(uint32))
+		}
+	}),
+}
+*/
 
 func ExecutePipeline(in ...job) (result int) {
 	//fmt.Printf("in := %#v \n", in)
@@ -301,42 +333,70 @@ func ExecutePipeline(in ...job) (result int) {
 	in_ch := make(chan interface{}, 100)
 	out_ch := make(chan interface{}, 100)
 
+	//var wg sync.WaitGroup
+	//const numDigesters = 20
+	//wg.Add(1)
+
+	//go func() {
 	in[0](in_ch, out_ch)
-
 	in_ch = out_ch
-	close(out_ch)
-	out_ch = make(chan interface{}, 100)
+	//	wg.Done()
+	//}()
 
-	countChan := make(chan interface{}, 100)
-	go func(in, out, countChan chan interface{}) {
-		var valueCounter int
-		for val := range in {
-			valueCounter++
-			out <- val
-		}
-		countChan <- valueCounter
-	}(in_ch, out_ch, countChan)
-
-	in_ch = out_ch
 	//close(out_ch)
+
+	//go func() {
+	//	wg.Wait()
+	close(out_ch)
+	//}()
+
 	out_ch = make(chan interface{}, 100)
 
-	go in[1](in_ch, out_ch) //SingleHash
-
+	count := CountValuesFromChannel(in_ch, out_ch)
 	in_ch = out_ch
 	out_ch = make(chan interface{}, 100)
 
-	go in[2](in_ch, out_ch) //MultiHash
+	for i := 1; i < len(in); i++ {
+		ReadNValuesAndCloseChannel(in_ch, out_ch, count)
+		in_ch = out_ch
+		out_ch = make(chan interface{}, 100)
+		in[i](in_ch, out_ch)
+		in_ch = out_ch
+		out_ch = make(chan interface{}, 100)
 
-	in_ch = out_ch
-	out_ch = make(chan interface{}, 100)
-	//out_ch <- inputValueCounter
-	in[3](in_ch, countChan) //CombineHash
+	}
 
-	in_ch = countChan
-	out_ch = make(chan interface{}, 100)
-	in[4](in_ch, out_ch) //Final
-
-	//fmt.Scanln()
 	return
+}
+
+func CountValuesFromChannel(in, out chan interface{}) int {
+
+	var count int
+
+	for i := range in {
+		count++
+		out <- i.(interface{})
+	}
+	close(out)
+	return count
+}
+
+func ReadNValuesAndCloseChannel(in, out chan interface{}, n int) {
+
+	var wg sync.WaitGroup
+	//const numDigesters = 20
+	wg.Add(n)
+
+	for i := 0; i < n; i++ {
+		go func() {
+			t := <-in
+			out <- t.(interface{})
+			wg.Done()
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
 }
